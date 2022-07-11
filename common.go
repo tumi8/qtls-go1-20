@@ -82,6 +82,11 @@ const (
 	compressionNone uint8 = 0
 )
 
+type Extension struct {
+	Type uint16
+	Data []byte
+}
+
 // TLS extension numbers
 const (
 	extensionServerName              uint16 = 0
@@ -124,6 +129,12 @@ type keyShare struct {
 	group CurveID
 	data  []byte
 }
+
+type KeyShare struct {
+	Group CurveID
+	Data  []byte
+}
+
 
 // TLS 1.3 PSK Key Exchange Modes. See RFC 8446, Section 4.2.9.
 const (
@@ -209,10 +220,10 @@ const (
 // include downgrade canaries even if it's using its highers supported version.
 var testingOnlyForceDowngradeCanary bool
 
-type ConnectionState = tls.ConnectionState
+//type ConnectionState = tls.ConnectionState
 
 // ConnectionState records basic TLS details about the connection.
-type connectionState struct {
+type ConnectionState struct {
 	// Version is the TLS version used by the connection (e.g. VersionTLS12).
 	Version uint16
 
@@ -269,6 +280,17 @@ type connectionState struct {
 	// response provided by the peer for the leaf certificate, if any.
 	OCSPResponse []byte
 
+	ServerHello                 *ServerHelloMsg
+	ClientHello                 ClientHelloMsg
+	ServerExtensions            []Extension
+	ServerEncryptedExtensions   []Extension
+	ServerCertRequestExtensions []Extension
+	HelloRetryRequestExtensions []Extension
+	CertificateExtensions       []Extension
+	SendAlerts                  []Alert
+	RecvAlerts                  []Alert
+	Errors                      []error
+
 	// TLSUnique contains the "tls-unique" channel binding value (see RFC 5929,
 	// Section 3). This value will be nil for TLS 1.3 connections and for all
 	// resumed connections.
@@ -280,6 +302,14 @@ type connectionState struct {
 
 	// ekm is a closure exposed via ExportKeyingMaterial.
 	ekm func(label string, context []byte, length int) ([]byte, error)
+}
+
+// ExportKeyingMaterial returns length bytes of exported key material in a new
+// slice as defined in RFC 5705. If context is nil, it is not used as part of
+// the seed. If the connection was set to allow renegotiation via
+// Config.Renegotiation, this function will return an error.
+func (cs *ConnectionState) ExportKeyingMaterial(label string, context []byte, length int) ([]byte, error) {
+	return cs.ekm(label, context, length)
 }
 
 // ClientAuthType is tls.ClientAuthType
@@ -1351,7 +1381,7 @@ func leafCertificate(c *Certificate) (*x509.Certificate, error) {
 
 type handshakeMessage interface {
 	marshal() ([]byte, error)
-	unmarshal([]byte) bool
+	unmarshal([]byte, *Conn) bool
 }
 
 // lruSessionCache is a ClientSessionCache implementation that uses an LRU
