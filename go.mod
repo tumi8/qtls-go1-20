@@ -1,4 +1,4 @@
-module github.com/quic-go/qtls-go1-20
+module github.com/tumi8/qtls-go1-20
 
 go 1.20
 
