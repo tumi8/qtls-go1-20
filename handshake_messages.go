@@ -5,6 +5,7 @@
 package qtls
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strings"
@@ -903,6 +904,14 @@ func (m *serverHelloMsg) unmarshal(data []byte, conn *Conn) bool {
 		return false
 	}
 
+	isHRR := bytes.Equal(m.random, helloRetryRequestRandom)
+	if isHRR {
+		conn.helloRetryRequestExtensions = make([]Extension, 0)
+	} else {
+		conn.serverExtensions = make([]Extension, 0)
+	}
+
+
 	seenExts := make(map[uint16]bool)
 	for !extensions.Empty() {
 		var extension uint16
@@ -910,6 +919,13 @@ func (m *serverHelloMsg) unmarshal(data []byte, conn *Conn) bool {
 		if !extensions.ReadUint16(&extension) ||
 			!extensions.ReadUint16LengthPrefixed(&extData) {
 			return false
+		}
+
+		// Here we have the Extension and Data before unknown ones   are discarded
+		if isHRR {
+			conn.helloRetryRequestExtensions = append(conn.helloRetryRequestExtensions, Extension{Type: extension, Data: extData})
+		} else {
+			conn.serverExtensions = append(conn.serverExtensions, Extension{Type: extension, Data: extData})
 		}
 
 		if seenExts[extension] {
